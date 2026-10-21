@@ -2,7 +2,7 @@
 
 Código do projeto Google Apps Script **Carga Horária Docente**, versão **10.0.9**, com preparação do modelo e assistente de instalação do **Professores no Painel (PNP)**.
 
-- ID do projeto: `1Fv9UdxL6YOCIFip2YbZ-jO2SVLat9zInOQTQScdGSN8ILge8fe-6mj8T`
+- Projeto de origem, somente referência: `1Fv9UdxL6YOCIFip2YbZ-jO2SVLat9zInOQTQScdGSN8ILge8fe-6mj8T`
 - Importação: 21 de outubro de 2026.
 - Importação original: 16 arquivos JavaScript, 3 arquivos HTML e o manifesto `appsscript.json`.
 - Ambiente: Google Apps Script V8, com fuso `America/Sao_Paulo`.
@@ -18,15 +18,15 @@ npx @google/clasp@3.4.1 login
 npx @google/clasp@3.4.1 status
 ```
 
-O arquivo `.clasp.json` aponta para o projeto original e não contém credenciais. O login deve permanecer na máquina de cada desenvolvedor.
+O arquivo `.clasp.json` aponta para o **projeto de teste** `1Ab6kAtQoQiUfXMCKg3GUXO6Vg0INe-Q0HZyEI4yXNTUI93bGQEsRC0Uo`, vinculado à planilha [PNP - INSTALADOR](https://docs.google.com/spreadsheets/d/1dOqReA6uHzx-eYWG06iS3nVE2W351F2B63hk8a8c2xo/edit). O projeto original deve ser preservado e não deve receber envios de código. Essa configuração não contém credenciais; o login deve permanecer na máquina de cada desenvolvedor.
 
 Para obter as alterações feitas no editor do Apps Script, use `npx @google/clasp@3.4.1 pull`. Esse comando sobrescreve os arquivos locais correspondentes; salve ou faça commit das alterações locais antes de executá-lo.
 
-Para enviar alterações locais ao projeto original, revise o diff e execute `npx @google/clasp@3.4.1 push`. O envio atualiza o código do projeto; a publicação de uma nova versão do aplicativo web é uma etapa separada.
+Para enviar alterações locais ao projeto de teste, confira o ID em `.clasp.json`, revise o diff e execute `npx @google/clasp@3.4.1 push`. O envio atualiza o código do projeto; a publicação de uma nova versão do aplicativo web é uma etapa separada.
 
 ## Preparar uma planilha instaladora
 
-1. Use uma planilha em branco e incorpore os arquivos do projeto ao Apps Script vinculado a ela, acessível em **Extensões > Apps Script**. Ao usar `clasp` para isso, configure o ID do projeto vinculado à nova planilha; o `.clasp.json` deste repositório aponta para o projeto original.
+1. Use a planilha de teste indicada acima ou incorpore os arquivos a outro projeto vinculado a uma planilha em branco, acessível em **Extensões > Apps Script**. Ao usar `clasp` com outra planilha, configure o ID do projeto vinculado a ela; o `.clasp.json` deste repositório aponta para o projeto de teste.
 2. Salve o projeto e recarregue ou reabra a planilha. O gatilho simples `onOpen` adiciona o menu **PNP**. Também é possível executar `onOpen` manualmente pelo editor para atualizar o menu.
 3. Escolha **PNP > Preparar planilha instaladora**. Na primeira execução, o Google poderá solicitar autorização. A função também pode ser executada pelo editor com o nome `prepararPlanilhaInstaladora`.
 4. Confira a confirmação: **todas as abas existentes e seus dados serão excluídos**. Ao confirmar, a função cria e formata uma nova aba **INSTALADORA** e depois exclui as anteriores, inclusive uma eventual aba com esse mesmo nome. Cancelar preserva a planilha.
