@@ -1,0 +1,495 @@
+<!--
+  @file TeacherConditionsView.html
+  @fileoverview Cadastro híbrido de docentes e condições administrativas.
+  @version 10.0.9
+-->
+<style>
+  .teacher-registry-container{width:min(1180px,96vw);max-height:92vh}
+  .teacher-registry-toolbar{display:flex;gap:.75rem;align-items:end;flex-wrap:wrap;margin-bottom:1rem}
+  .teacher-registry-toolbar .input-group{min-width:260px;flex:1}
+  .teacher-registry-layout{display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:1rem;min-height:480px}
+  .teacher-registry-list{border:1px solid var(--color-border);border-radius:var(--radius-md);overflow:auto;max-height:60vh;background:var(--color-surface)}
+  .teacher-registry-option{width:100%;border:0;border-bottom:1px solid var(--color-border);background:transparent;color:inherit;text-align:left;padding:.75rem;cursor:pointer;display:grid;gap:.18rem}
+  .teacher-registry-option:hover,.teacher-registry-option:focus-visible{background:var(--color-primary-light);outline:none}
+  .teacher-registry-option.active{background:var(--color-primary-light);box-shadow:inset 4px 0 0 var(--color-primary)}
+  .teacher-registry-option strong{font-size:.86rem}.teacher-registry-option span{font-size:.74rem;color:var(--color-text-muted)}
+  .teacher-registry-detail{border:1px solid var(--color-border);border-radius:var(--radius-md);padding:1rem;overflow:auto;max-height:60vh;background:var(--color-surface)}
+  .teacher-imported-summary{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.65rem;margin:.8rem 0}
+  .teacher-imported-item{border:1px solid var(--color-border);border-radius:var(--radius-md);padding:.65rem;background:#f9fafb}
+  .teacher-imported-item span{display:block;font-size:.7rem;color:var(--color-text-muted);text-transform:uppercase;font-weight:700}.teacher-imported-item strong{display:block;margin-top:.2rem;font-size:.82rem}
+  .teacher-condition-heading{display:flex;align-items:center;justify-content:space-between;gap:.65rem;margin:1rem 0 .55rem;flex-wrap:wrap}
+  .teacher-condition-list,.teacher-suggestion-list{display:grid;gap:.55rem}
+  .teacher-condition-card{border:1px solid var(--color-border);border-radius:var(--radius-md);padding:.7rem;display:grid;gap:.35rem;background:var(--color-surface)}
+  .teacher-condition-card.inactive{opacity:.7;background:#f8fafc}
+  .teacher-condition-card-header{display:flex;align-items:flex-start;justify-content:space-between;gap:.55rem}
+  .teacher-condition-card p{margin:0;color:var(--color-text-muted);font-size:.78rem}.teacher-condition-card small{color:var(--color-text-muted)}
+  .teacher-condition-actions{display:flex;gap:.4rem;flex-wrap:wrap}
+  .teacher-condition-form{margin-top:1rem;padding:1rem;border:1px solid var(--color-primary);border-radius:var(--radius-md);background:var(--color-primary-light)}
+  .teacher-condition-form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.75rem}
+  .teacher-condition-form-grid .wide{grid-column:span 2}.teacher-condition-form-grid .full{grid-column:1/-1}
+  .teacher-condition-checkboxes{display:flex;gap:1rem;flex-wrap:wrap;margin-top:.75rem}.teacher-condition-checkboxes label{display:flex;align-items:center;gap:.4rem}
+  .teacher-condition-empty{padding:1rem;text-align:center;color:var(--color-text-muted);border:1px dashed var(--color-border);border-radius:var(--radius-md)}
+  .condition-origin-badge{display:inline-flex;padding:.18rem .42rem;border-radius:999px;background:#e0e7ff;color:#3730a3;font-size:.68rem;font-weight:700}
+  html[data-theme="dark"] .teacher-imported-item,html[data-theme="dark"] .teacher-condition-card.inactive{background:var(--color-surface-muted)}
+  html[data-theme="dark"] .teacher-condition-form{background:rgba(34,197,94,.1)}
+  html[data-theme="dark"] .condition-origin-badge{background:#312e81;color:#e0e7ff}
+  @media(max-width:860px){.teacher-registry-layout{grid-template-columns:1fr}.teacher-registry-list{max-height:260px}.teacher-condition-form-grid{grid-template-columns:1fr 1fr}.teacher-condition-form-grid .wide{grid-column:span 2}}
+  @media(max-width:560px){.teacher-imported-summary,.teacher-condition-form-grid{grid-template-columns:1fr}.teacher-condition-form-grid .wide{grid-column:span 1}.teacher-condition-form-grid .full{grid-column:1}}
+</style>
+
+<div class="modal-overlay" id="teacherRegistryModal" aria-hidden="true">
+  <div class="modal-container teacher-registry-container" role="dialog" aria-modal="true" aria-labelledby="teacherRegistryTitle">
+    <div class="modal-header">
+      <div>
+        <h2 id="teacherRegistryTitle">Cadastro de docentes</h2>
+        <span class="unit-label">Dados oficiais importados e condições administrativas preservadas.</span>
+      </div>
+      <button class="modal-close-btn" id="teacherRegistryCloseBtn" aria-label="Fechar cadastro de docentes">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="teacherRegistryFeedback" class="analysis-status hidden" role="status" aria-live="polite"></div>
+      <div class="teacher-registry-toolbar">
+        <div class="input-group">
+          <label for="teacherRegistrySearch">Buscar docente</label>
+          <input type="search" id="teacherRegistrySearch" class="input-control" placeholder="Nome, matrícula, função ou condição">
+        </div>
+        <label class="checkbox-row" for="teacherRegistrySuggestionsOnly">
+          <input type="checkbox" id="teacherRegistrySuggestionsOnly"> Somente com sugestões pendentes
+        </label>
+        <button type="button" class="compact-action-btn" id="teacherRegistryRefreshBtn"><i class="ph ph-arrows-clockwise"></i> Atualizar</button>
+      </div>
+      <div class="teacher-registry-layout">
+        <div id="teacherRegistryList" class="teacher-registry-list" aria-label="Docentes importados"></div>
+        <section id="teacherRegistryDetail" class="teacher-registry-detail" aria-live="polite">
+          <div class="teacher-condition-empty">Selecione um docente para visualizar os dados importados e administrar suas condições.</div>
+        </section>
+      </div>
+    </div>
+    <div class="modal-footer"><button class="input-control btn" id="teacherRegistryCloseFooterBtn">Fechar</button></div>
+  </div>
+</div>
+
+<script>
+  /** @version 10.0.9 */
+  class TeacherConditionManagementController {
+    constructor(options = {}) {
+      this.onDataChanged = options.onDataChanged || (() => Promise.resolve());
+      this.data = null;
+      this.selectedRegistration = '';
+      this.busy = false;
+      this.els = {
+        open: document.getElementById('btnTeachers'),
+        modal: document.getElementById('teacherRegistryModal'),
+        close: document.getElementById('teacherRegistryCloseBtn'),
+        closeFooter: document.getElementById('teacherRegistryCloseFooterBtn'),
+        feedback: document.getElementById('teacherRegistryFeedback'),
+        search: document.getElementById('teacherRegistrySearch'),
+        suggestionsOnly: document.getElementById('teacherRegistrySuggestionsOnly'),
+        refresh: document.getElementById('teacherRegistryRefreshBtn'),
+        list: document.getElementById('teacherRegistryList'),
+        detail: document.getElementById('teacherRegistryDetail')
+      };
+      this.bind();
+    }
+
+    bind() {
+      this.els.open.addEventListener('click', () => this.open());
+      this.els.close.addEventListener('click', () => this.close());
+      this.els.closeFooter.addEventListener('click', () => this.close());
+      this.els.modal.addEventListener('click', event => {
+        if (event.target === this.els.modal) this.close();
+      });
+      this.els.refresh.addEventListener('click', () => this.load());
+      this.els.search.addEventListener('input', () => this.renderList());
+      this.els.suggestionsOnly.addEventListener('change', () => this.renderList());
+      document.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && this.els.modal.classList.contains('active')) {
+          this.close();
+        }
+      });
+    }
+
+    async open() {
+      this.els.modal.classList.add('active');
+      this.els.modal.setAttribute('aria-hidden', 'false');
+      document.dispatchEvent(new CustomEvent('teacher-registry-opened'));
+      await this.load();
+      this.els.search.focus();
+    }
+
+    close() {
+      if (this.busy) return;
+      this.els.modal.classList.remove('active');
+      this.els.modal.setAttribute('aria-hidden', 'true');
+      this.els.open.focus();
+    }
+
+    async load() {
+      if (this.busy) return;
+      try {
+        this.setBusy(true);
+        this.showFeedback('Carregando o espelho de docentes e as condições cadastradas.');
+        const response = await ServerApi.call('getTeacherConditionManagementData');
+        this.data = response.data || { teachers: [], summary: {} };
+        const teachers = this.data.teachers || [];
+        if (!teachers.some(item => item.registration === this.selectedRegistration)) {
+          this.selectedRegistration = teachers[0] ? teachers[0].registration : '';
+        }
+        this.showFeedback(
+          `${teachers.length} docentes · ${Number(this.data.summary.activeConditionCount || 0)} condições ativas · ${Number(this.data.summary.suggestionCount || 0)} sugestões pendentes.`
+        );
+        this.renderList();
+        this.renderDetail();
+      } catch (error) {
+        this.data = { teachers: [], summary: {} };
+        this.showFeedback(error.message || String(error), true);
+        this.renderList();
+        this.renderDetail();
+      } finally {
+        this.setBusy(false);
+      }
+    }
+
+    filteredTeachers() {
+      const term = String(this.els.search.value || '').trim().toLowerCase();
+      const suggestionsOnly = this.els.suggestionsOnly.checked;
+      return (this.data && this.data.teachers || []).filter(teacher => {
+        if (suggestionsOnly && (!teacher.suggestions || teacher.suggestions.length === 0)) {
+          return false;
+        }
+        if (!term) return true;
+        const conditionText = (teacher.conditions || []).map(item => `${item.description} ${item.reason}`).join(' ');
+        return [
+          teacher.name,
+          teacher.registration,
+          teacher.officialFunction,
+          teacher.workRegimeLabel,
+          conditionText
+        ].join(' ').toLowerCase().includes(term);
+      });
+    }
+
+    renderList() {
+      this.els.list.replaceChildren();
+      const teachers = this.filteredTeachers();
+      if (teachers.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'teacher-condition-empty';
+        empty.textContent = 'Nenhum docente corresponde aos filtros.';
+        this.els.list.appendChild(empty);
+        return;
+      }
+      teachers.forEach(teacher => {
+        const button = document.createElement('button');
+        const name = document.createElement('strong');
+        const meta = document.createElement('span');
+        const counters = document.createElement('span');
+        button.type = 'button';
+        button.className = `teacher-registry-option${teacher.registration === this.selectedRegistration ? ' active' : ''}`;
+        name.textContent = teacher.name;
+        meta.textContent = `Matrícula ${teacher.registration} · ${teacher.workRegimeLabel}`;
+        const activeCount = (teacher.conditions || []).filter(item => item.active).length;
+        const suggestionCount = (teacher.suggestions || []).length;
+        counters.textContent = `${activeCount} condição(ões) ativa(s)${suggestionCount ? ` · ${suggestionCount} sugestão(ões)` : ''}`;
+        button.append(name, meta, counters);
+        button.addEventListener('click', () => {
+          this.selectedRegistration = teacher.registration;
+          this.renderList();
+          this.renderDetail();
+        });
+        this.els.list.appendChild(button);
+      });
+    }
+
+    selectedTeacher() {
+      return (this.data && this.data.teachers || []).find(
+        item => item.registration === this.selectedRegistration
+      ) || null;
+    }
+
+    renderDetail() {
+      this.els.detail.replaceChildren();
+      const teacher = this.selectedTeacher();
+      if (!teacher) {
+        const empty = document.createElement('div');
+        empty.className = 'teacher-condition-empty';
+        empty.textContent = 'Selecione um docente para administrar suas condições.';
+        this.els.detail.appendChild(empty);
+        return;
+      }
+      const title = document.createElement('h3');
+      const subtitle = document.createElement('p');
+      title.textContent = teacher.name;
+      subtitle.className = 'unit-label';
+      subtitle.textContent = `Matrícula ${teacher.registration}. Os dados importados abaixo são somente para consulta.`;
+      this.els.detail.append(title, subtitle, this.buildImportedSummary(teacher));
+      this.renderSuggestions(teacher);
+      this.renderConditions(teacher);
+    }
+
+    buildImportedSummary(teacher) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'teacher-imported-summary';
+      [
+        ['Cargo', teacher.jobTitle || 'Não informado'],
+        ['Regime importado', teacher.workRegimeLabel || 'Não identificado'],
+        ['Coluna J', teacher.workloadCode || 'Não informada'],
+        ['Função importada', teacher.officialFunction || 'Não informada']
+      ].forEach(([label, value]) => {
+        const item = document.createElement('div');
+        const caption = document.createElement('span');
+        const content = document.createElement('strong');
+        item.className = 'teacher-imported-item';
+        caption.textContent = label;
+        content.textContent = value;
+        item.append(caption, content);
+        wrapper.appendChild(item);
+      });
+      return wrapper;
+    }
+
+    renderSuggestions(teacher) {
+      const heading = this.buildHeading('Sugestões da importação');
+      const addBlank = document.createElement('button');
+      addBlank.type = 'button';
+      addBlank.className = 'compact-action-btn';
+      addBlank.innerHTML = '<i class="ph ph-plus"></i> Nova condição';
+      addBlank.addEventListener('click', () => this.openForm(teacher, null));
+      heading.appendChild(addBlank);
+      this.els.detail.appendChild(heading);
+      const suggestions = teacher.suggestions || [];
+      if (suggestions.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'teacher-condition-empty';
+        empty.textContent = 'Nenhuma sugestão pendente nas colunas J e S.';
+        this.els.detail.appendChild(empty);
+        return;
+      }
+      const list = document.createElement('div');
+      list.className = 'teacher-suggestion-list';
+      suggestions.forEach(suggestion => {
+        const card = document.createElement('article');
+        const header = document.createElement('div');
+        const name = document.createElement('strong');
+        const action = document.createElement('button');
+        const reason = document.createElement('p');
+        card.className = 'teacher-condition-card';
+        header.className = 'teacher-condition-card-header';
+        name.textContent = suggestion.description;
+        action.type = 'button';
+        action.className = 'compact-action-btn';
+        action.textContent = 'Revisar e cadastrar';
+        action.addEventListener('click', () => this.openForm(teacher, suggestion));
+        reason.textContent = suggestion.reason;
+        header.append(name, action);
+        card.append(header, reason);
+        list.appendChild(card);
+      });
+      this.els.detail.appendChild(list);
+    }
+
+    renderConditions(teacher) {
+      this.els.detail.appendChild(this.buildHeading('Condições cadastradas'));
+      const conditions = teacher.conditions || [];
+      if (conditions.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'teacher-condition-empty';
+        empty.textContent = 'Nenhuma condição administrativa cadastrada.';
+        this.els.detail.appendChild(empty);
+        return;
+      }
+      const list = document.createElement('div');
+      list.className = 'teacher-condition-list';
+      conditions.forEach(condition => {
+        const card = document.createElement('article');
+        const header = document.createElement('div');
+        const titleBox = document.createElement('div');
+        const name = document.createElement('strong');
+        const status = document.createElement('span');
+        const reason = document.createElement('p');
+        const vigency = document.createElement('small');
+        const actions = document.createElement('div');
+        const edit = document.createElement('button');
+        const toggle = document.createElement('button');
+        card.className = `teacher-condition-card${condition.active ? '' : ' inactive'}`;
+        header.className = 'teacher-condition-card-header';
+        name.textContent = condition.description;
+        status.className = 'condition-origin-badge';
+        status.textContent = condition.active ? 'Ativa' : 'Inativa';
+        titleBox.append(name, document.createTextNode(' '), status);
+        reason.textContent = condition.reason;
+        vigency.textContent = this.conditionVigency(condition)
+          + (condition.exemption ? ' · dispensa de aulas' : this.conditionRange(condition));
+        actions.className = 'teacher-condition-actions';
+        edit.type = 'button';
+        edit.className = 'compact-action-btn';
+        edit.textContent = 'Editar';
+        edit.addEventListener('click', () => this.openForm(teacher, condition));
+        toggle.type = 'button';
+        toggle.className = 'compact-action-btn';
+        toggle.textContent = condition.active ? 'Inativar' : 'Reativar';
+        toggle.addEventListener('click', () => this.toggleCondition(condition));
+        actions.append(edit, toggle);
+        header.append(titleBox, actions);
+        card.append(header, reason, vigency);
+        list.appendChild(card);
+      });
+      this.els.detail.appendChild(list);
+    }
+
+    buildHeading(text) {
+      const heading = document.createElement('div');
+      const title = document.createElement('h4');
+      heading.className = 'teacher-condition-heading';
+      title.textContent = text;
+      heading.appendChild(title);
+      return heading;
+    }
+
+    conditionVigency(condition) {
+      const start = condition.startYear
+        ? `${condition.startYear}${condition.startSemester ? `/${condition.startSemester}º` : ''}`
+        : 'início não informado';
+      const end = condition.endYear
+        ? `${condition.endYear}${condition.endSemester ? `/${condition.endSemester}º` : ''}`
+        : 'sem prazo final';
+      return `Vigência: ${start} até ${end}`;
+    }
+
+    conditionRange(condition) {
+      return condition.minimum !== null && condition.maximum !== null
+        ? ` · referência ${condition.minimum}–${condition.maximum} h/sem`
+        : '';
+    }
+
+    openForm(teacher, source) {
+      document.getElementById('teacherConditionForm')?.remove();
+      const item = source || {};
+      const editing = Boolean(item.id);
+      const form = document.createElement('form');
+      form.id = 'teacherConditionForm';
+      form.className = 'teacher-condition-form';
+      form.innerHTML = `
+        <h4>${editing ? 'Editar condição' : 'Cadastrar condição'}</h4>
+        <input type="hidden" id="teacherConditionId">
+        <div class="teacher-condition-form-grid">
+          <div class="input-group wide"><label for="teacherConditionDescription">Descrição pública</label><input id="teacherConditionDescription" class="input-control" maxlength="140" required></div>
+          <div class="input-group"><label for="teacherConditionMinimum">Mínimo semanal</label><input id="teacherConditionMinimum" type="number" class="input-control" min="0" max="80" step="0.5"></div>
+          <div class="input-group"><label for="teacherConditionMaximum">Máximo semanal</label><input id="teacherConditionMaximum" type="number" class="input-control" min="0" max="80" step="0.5"></div>
+          <div class="input-group full"><label for="teacherConditionReason">Motivo exibido no dashboard</label><textarea id="teacherConditionReason" class="input-control" maxlength="500" rows="3" required></textarea></div>
+          <div class="input-group"><label for="teacherConditionStartYear">Ano inicial</label><input id="teacherConditionStartYear" type="number" class="input-control" min="1900" max="2200" required></div>
+          <div class="input-group"><label for="teacherConditionStartSemester">Semestre inicial</label><select id="teacherConditionStartSemester" class="input-control"><option value="">Ano inteiro</option><option value="1">1º semestre</option><option value="2">2º semestre</option></select></div>
+          <div class="input-group"><label for="teacherConditionEndYear">Ano final</label><input id="teacherConditionEndYear" type="number" class="input-control" min="1900" max="2200" placeholder="Sem prazo"></div>
+          <div class="input-group"><label for="teacherConditionEndSemester">Semestre final</label><select id="teacherConditionEndSemester" class="input-control"><option value="">Fim do ano</option><option value="1">1º semestre</option><option value="2">2º semestre</option></select></div>
+        </div>
+        <div class="teacher-condition-checkboxes">
+          <label><input type="checkbox" id="teacherConditionExemption"> Dispensa de aulas</label>
+          <label><input type="checkbox" id="teacherConditionJustifies" checked> Justifica carga abaixo do mínimo geral</label>
+          <label><input type="checkbox" id="teacherConditionActive" checked> Condição ativa</label>
+        </div>
+        <div class="management-actions"><button type="button" class="input-control btn" id="teacherConditionCancelBtn">Cancelar</button><button type="submit" class="input-control btn btn-primary">Salvar condição</button></div>`;
+      this.els.detail.appendChild(form);
+      const value = (id, property, fallback = '') => {
+        document.getElementById(id).value = item[property] === null
+          || item[property] === undefined ? fallback : item[property];
+      };
+      value('teacherConditionId', 'id');
+      value('teacherConditionDescription', 'description');
+      value('teacherConditionReason', 'reason');
+      value('teacherConditionMinimum', 'minimum');
+      value('teacherConditionMaximum', 'maximum');
+      value('teacherConditionStartYear', 'startYear', String(new Date().getFullYear()));
+      value('teacherConditionStartSemester', 'startSemester');
+      value('teacherConditionEndYear', 'endYear');
+      value('teacherConditionEndSemester', 'endSemester');
+      document.getElementById('teacherConditionExemption').checked = item.exemption === true;
+      document.getElementById('teacherConditionJustifies').checked = item.justifiesBelowMinimum !== false;
+      document.getElementById('teacherConditionActive').checked = item.active !== false;
+      const syncExemption = () => {
+        const checked = document.getElementById('teacherConditionExemption').checked;
+        document.getElementById('teacherConditionMinimum').disabled = checked;
+        document.getElementById('teacherConditionMaximum').disabled = checked;
+      };
+      document.getElementById('teacherConditionExemption').addEventListener('change', syncExemption);
+      syncExemption();
+      document.getElementById('teacherConditionCancelBtn').addEventListener('click', () => form.remove());
+      form.addEventListener('submit', event => {
+        event.preventDefault();
+        this.saveCondition(teacher);
+      });
+      form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      document.getElementById('teacherConditionDescription').focus();
+    }
+
+    async saveCondition(teacher) {
+      if (this.busy) return;
+      const payload = {
+        id: document.getElementById('teacherConditionId').value,
+        registration: teacher.registration,
+        description: document.getElementById('teacherConditionDescription').value,
+        reason: document.getElementById('teacherConditionReason').value,
+        minimum: document.getElementById('teacherConditionMinimum').disabled ? '' : document.getElementById('teacherConditionMinimum').value,
+        maximum: document.getElementById('teacherConditionMaximum').disabled ? '' : document.getElementById('teacherConditionMaximum').value,
+        exemption: document.getElementById('teacherConditionExemption').checked,
+        justifiesBelowMinimum: document.getElementById('teacherConditionJustifies').checked,
+        startYear: document.getElementById('teacherConditionStartYear').value,
+        startSemester: document.getElementById('teacherConditionStartSemester').value,
+        endYear: document.getElementById('teacherConditionEndYear').value,
+        endSemester: document.getElementById('teacherConditionEndSemester').value,
+        active: document.getElementById('teacherConditionActive').checked
+      };
+      try {
+        this.setBusy(true);
+        const response = await ServerApi.call('saveTeacherCondition', payload);
+        this.data = response.data;
+        this.showFeedback('Condição salva. Os dados importados do docente foram preservados.');
+        this.renderList();
+        this.renderDetail();
+        document.dispatchEvent(new CustomEvent('teacher-condition-data-changed'));
+        await this.onDataChanged();
+      } catch (error) {
+        this.showFeedback(error.message || String(error), true);
+      } finally {
+        this.setBusy(false);
+      }
+    }
+
+    async toggleCondition(condition) {
+      if (this.busy) return;
+      try {
+        this.setBusy(true);
+        const response = await ServerApi.call(
+          'setTeacherConditionActive',
+          condition.id,
+          !condition.active
+        );
+        this.data = response.data;
+        this.showFeedback(condition.active ? 'Condição inativada; o histórico foi preservado.' : 'Condição reativada.');
+        this.renderList();
+        this.renderDetail();
+        document.dispatchEvent(new CustomEvent('teacher-condition-data-changed'));
+        await this.onDataChanged();
+      } catch (error) {
+        this.showFeedback(error.message || String(error), true);
+      } finally {
+        this.setBusy(false);
+      }
+    }
+
+    showFeedback(message, error = false) {
+      this.els.feedback.textContent = String(message || '');
+      this.els.feedback.classList.remove('hidden');
+      this.els.feedback.classList.toggle('error', Boolean(error));
+    }
+
+    setBusy(busy) {
+      this.busy = Boolean(busy);
+      [this.els.close, this.els.closeFooter, this.els.refresh].forEach(button => {
+        button.disabled = this.busy;
+      });
+      this.els.detail.querySelectorAll('button,input,select,textarea').forEach(element => {
+        element.disabled = this.busy;
+      });
+    }
+  }
+</script>

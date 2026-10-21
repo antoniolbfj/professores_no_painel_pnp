@@ -1,0 +1,14 @@
+# Credenciais locais do Google/clasp
+.clasprc.json
+.clasprc*.json
+*-clasprc.json
+.credentials/
+.env
+.env.*
+!.env.example
+
+# Dependências e arquivos locais
+node_modules/
+*.log
+.DS_Store
+Thumbs.db

@@ -1,0 +1,9 @@
+# Sincroniza somente os arquivos de código e o manifesto do Apps Script.
+**/**
+!**/*.js
+!**/*.gs
+!**/*.html
+!appsscript.json
+.git/**
+node_modules/**
+.credentials/**
