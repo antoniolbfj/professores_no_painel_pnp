@@ -1,122 +1,6 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const test = require('node:test');
-const vm = require('node:vm');
-
-const source = fs.readFileSync(path.join(__dirname, '..', 'Instaladora.js'), 'utf8');
-
-function simulate(options = {}) {
-  let nextId = 1;
-  const state = {
-    sheets: [], menus: [], alerts: [], deleted: [], toasts: [], operations: [],
-    releases: 0, lockAttempts: 0, insertions: 0
-  };
-
-  function createSheet(name) {
-    const sheet = {
-      id: nextId++, name, deleted: false, rows: 1000, columns: 26, cells: new Map(),
-      gridlinesHidden: false, frozenRows: 0,
-      getSheetId() { return this.id; },
-      getName() {
-        assert.equal(this.deleted, false, 'Não consultar uma aba excluída.');
-        return this.name;
-      },
-      setName(value) {
-        assert.equal(state.sheets.some(other => other !== this && other.name === value), false);
-        this.name = value;
-        return this;
-      },
-      getMaxRows() { return this.rows; },
-      getMaxColumns() { return this.columns; },
-      deleteRows(first, count) { assert.equal(first + count - 1, this.rows); this.rows -= count; },
-      deleteColumns(first, count) { assert.equal(first + count - 1, this.columns); this.columns -= count; },
-      setHiddenGridlines(value) { this.gridlinesHidden = value; },
-      setTabColor(value) { this.tabColor = value; },
-      setColumnWidth() {},
-      setColumnWidths() {},
-      setRowHeights() {},
-      setFrozenRows(value) { this.frozenRows = value; },
-      getRange(address) {
-        if (options.failFormatting && this.created) throw new Error('Falha ao formatar.');
-        const range = {
-          merge() { return this; },
-          setValue(value) { sheet.cells.set(address, value); return this; }
-        };
-        for (const method of [
-          'setBackground', 'setFontFamily', 'setFontSize', 'setFontColor',
-          'setVerticalAlignment', 'setWrap', 'setFontWeight', 'setHorizontalAlignment'
-        ]) range[method] = function() { return this; };
-        return range;
-      }
-    };
-    state.sheets.push(sheet);
-    return sheet;
-  }
-
-  for (const name of options.names || ['Página1']) createSheet(name);
-  state.originals = state.sheets.slice();
-
-  const spreadsheet = {
-    getSheets() { return state.sheets.slice(); },
-    insertSheet() {
-      state.insertions++;
-      state.operations.push('insert');
-      const sheet = createSheet('Temporária ' + nextId);
-      sheet.created = true;
-      return sheet;
-    },
-    deleteSheet(sheet) {
-      assert.equal(state.sheets.length > 1, true, 'Preservar pelo menos uma aba.');
-      if (options.failDeleting === sheet.name) throw new Error('Não foi possível excluir a aba.');
-      state.operations.push('delete:' + sheet.name);
-      state.deleted.push(sheet.name);
-      state.sheets = state.sheets.filter(other => other !== sheet);
-      sheet.deleted = true;
-    },
-    setActiveSheet(sheet) { state.active = sheet; },
-    moveActiveSheet(position) { assert.equal(position, 1); },
-    toast(...args) { state.toasts.push(args); }
-  };
-  const ui = {
-    ButtonSet: { YES_NO: 'YES_NO' },
-    Button: { YES: 'YES', NO: 'NO', CLOSE: 'CLOSE' },
-    createMenu(name) {
-      const menu = {
-        name, items: [],
-        addItem(label, callback) { this.items.push({ label, callback }); return this; },
-        addToUi() { state.menus.push(this); }
-      };
-      return menu;
-    },
-    alert(...args) {
-      state.alerts.push(args);
-      if (options.changeSheetsInDialog) createSheet('Adicionada durante a confirmação');
-      return options.answer || 'YES';
-    }
-  };
-  const context = vm.createContext({
-    SpreadsheetApp: {
-      getActiveSpreadsheet() { return options.noSpreadsheet ? null : spreadsheet; },
-      getUi() { return ui; },
-      flush() { state.operations.push('flush'); }
-    },
-    LockService: {
-      getDocumentLock() {
-        return {
-          tryLock() { state.lockAttempts++; return options.lockAvailable !== false; },
-          releaseLock() { state.releases++; }
-        };
-      }
-    }
-  });
-  vm.runInContext(source, context, { filename: 'Instaladora.js' });
-  return {
-    state,
-    open() { return vm.runInContext('onOpen()', context); },
-    prepare() { return vm.runInContext('prepararPlanilhaInstaladora()', context); }
-  };
-}
+const { simulate } = require('./support/apps-script.cjs');
 
 test('abrir uma planilha em branco cria o menu PNP sem alterar abas nem pedir autorização', () => {
   const app = simulate();
@@ -125,6 +9,8 @@ test('abrir uma planilha em branco cria o menu PNP sem alterar abas nem pedir au
   assert.equal(app.state.menus[0].name, 'PNP');
   assert.deepEqual(app.state.menus[0].items, [{
     label: 'Preparar planilha instaladora', callback: 'prepararPlanilhaInstaladora'
+  }, {
+    label: 'Iniciar assistente de instalação', callback: 'iniciarAssistenteInstalacao'
   }]);
   assert.equal(app.state.alerts.length, 0);
   assert.equal(app.state.insertions, 0);
@@ -164,7 +50,7 @@ test('confirmar cria orientações completas e deixa somente a aba INSTALADORA',
   assert.equal(guide.columns, 8);
   assert.equal(guide.frozenRows, 5);
   const text = Array.from(guide.cells.values()).join('\n');
-  assert.match(text, /Bem-vindo\(a\)!/);
+  assert.match(text, /Bem-vindo\(a\) ao Professores no Painel \(PNP\)!/);
   assert.match(text, /PROFESSORES NO PAINEL \(PNP\)/);
   assert.match(text, /CÓPIA OBRIGATÓRIA ANTES DA INSTALAÇÃO/);
   assert.match(text, /Arquivo > Fazer uma cópia/);

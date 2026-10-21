@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px; background: #f8faf9; color: #173a27;
+      font: 14px/1.55 Arial, sans-serif; }
+    .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+    .mark { background: #166534; color: white; padding: 9px 11px; border-radius: 10px;
+      font-weight: bold; letter-spacing: 1px; }
+    .brand strong { display: block; }
+    .muted, .brand span { color: #52665b; }
+    .steps { color: #52665b; font-size: 12px; margin-bottom: 12px; }
+    h1 { font-size: 25px; line-height: 1.25; margin: 0 0 16px; }
+    h2 { font-size: 21px; margin: 0 0 12px; }
+    p { margin: 10px 0; }
+    .card { background: white; border: 1px solid #d8e5dc; border-radius: 12px;
+      padding: 16px; margin: 16px 0; }
+    .check { color: #166534; font-weight: bold; }
+    dl { margin: 0; }
+    dt { color: #52665b; font-size: 12px; margin-top: 10px; }
+    dt:first-child { margin-top: 0; }
+    dd { margin: 0; font-weight: bold; overflow-wrap: anywhere; }
+    ul { padding-left: 22px; }
+    .consent { display: flex; align-items: flex-start; gap: 10px; margin: 18px 0; }
+    input { margin-top: 5px; accent-color: #166534; }
+    .actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+    button { font: inherit; font-weight: bold; border-radius: 8px; padding: 10px 15px;
+      cursor: pointer; border: 1px solid #b7c9bd; background: white; color: #173a27; }
+    button.primary { background: #166534; color: white; border-color: #166534; }
+    button:disabled { opacity: .5; cursor: default; }
+    button:focus-visible, input:focus-visible { outline: 3px solid #65a30d; outline-offset: 3px; }
+    .error { padding: 14px; border: 1px solid #f0b7af; border-radius: 8px;
+      background: #fff1f0; color: #8c2820; white-space: pre-line; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <div class="brand">
+    <div class="mark" aria-hidden="true">PNP</div>
+    <div><strong>Professores no Painel</strong><span>Assistente de instalação</span></div>
+  </div>
+
+  <main>
+    <div id="loading" role="status">Conferindo a planilha e a conta de instalação…</div>
+    <div id="error" class="error" role="alert" hidden></div>
+
+    <section id="welcome" hidden>
+      <div class="steps">Etapa 1 de 2 · Boas-vindas</div>
+      <h1>Bem-vindo(a) ao Professores no Painel (PNP)!</h1>
+      <p>Vamos preparar sua nova instalação nesta cópia da planilha.</p>
+      <div class="card">
+        <p class="check">✓ Preparação da planilha instaladora concluída</p>
+        <p class="check">✓ Arquivo diferente do modelo original</p>
+        <p class="check">✓ Conta autorizada para instalar</p>
+      </div>
+      <p>A próxima etapa apresenta o arquivo, a conta e as estruturas que serão criadas.
+        A instalação começa somente após sua confirmação.</p>
+    </section>
+
+    <section id="review" hidden>
+      <div class="steps">Etapa 2 de 2 · Confira e confirme</div>
+      <h2>Instalar o PNP nesta cópia</h2>
+      <div class="card">
+        <dl>
+          <dt>Planilha de destino</dt><dd id="spreadsheet-name"></dd>
+          <dt>Conta de instalação</dt><dd id="account"></dd>
+          <dt>Versão do sistema</dt><dd id="version"></dd>
+        </dl>
+      </div>
+      <p>Serão criadas ou validadas as seguintes abas:</p>
+      <ul id="sheet-list"></ul>
+      <p id="bootstrap" class="muted" hidden></p>
+      <p id="retry-note" class="muted" hidden>A tentativa anterior não foi concluída.
+        O assistente retomará a preparação preservando os registros existentes.</p>
+      <label class="consent">
+        <input id="consent" type="checkbox">
+        <span>Confirmo a instalação do Professores no Painel nesta cópia da planilha.</span>
+      </label>
+    </section>
+
+    <section id="running" role="status" aria-live="polite" hidden>
+      <h2>Instalando o Professores no Painel…</h2>
+      <p>Estamos criando as estruturas e verificando a instalação.
+        Aguarde a conclusão antes de fechar este assistente.</p>
+    </section>
+
+    <section id="done" role="status" aria-live="polite" hidden>
+      <h2 id="done-title">Instalação concluída!</h2>
+      <p>A estrutura do Professores no Painel (PNP) está pronta nesta planilha.</p>
+      <p>Continue com a configuração dos acessos e a importação dos dados da sua instalação.</p>
+    </section>
+  </main>
+
+  <div class="actions">
+    <button id="close" type="button">Fechar</button>
+    <button id="back" type="button" hidden>Voltar</button>
+    <button id="reload" type="button" hidden>Conferir novamente</button>
+    <button id="next" class="primary" type="button" hidden>Continuar</button>
+    <button id="install" class="primary" type="button" disabled hidden>Instalar PNP</button>
+  </div>
+
+  <script>
+    'use strict';
+    const element = id => document.getElementById(id);
+    const sections = ['loading', 'welcome', 'review', 'running', 'done'];
+
+    function show(section) {
+      sections.forEach(id => { element(id).hidden = id !== section; });
+      element('error').hidden = true;
+      element('reload').hidden = true;
+      element('next').hidden = section !== 'welcome';
+      element('back').hidden = section !== 'review';
+      element('install').hidden = section !== 'review';
+      element('close').disabled = section === 'running';
+    }
+
+    function failure(error) {
+      show(null);
+      element('error').textContent = error && error.message ? error.message : 'Não foi possível concluir a operação.';
+      element('error').hidden = false;
+      element('reload').hidden = false;
+    }
+
+    function load() {
+      show('loading');
+      element('consent').checked = false;
+      element('install').disabled = true;
+      google.script.run.withSuccessHandler(context => {
+        if (context.installed) {
+          element('done-title').textContent = 'O PNP já está instalado nesta cópia.';
+          show('done');
+          return;
+        }
+        element('spreadsheet-name').textContent = context.spreadsheetName;
+        element('account').textContent = context.email;
+        element('version').textContent = context.version;
+        element('sheet-list').replaceChildren();
+        context.sheets.forEach(name => {
+          const item = document.createElement('li');
+          item.textContent = name;
+          element('sheet-list').appendChild(item);
+        });
+        element('bootstrap').hidden = !context.firstSuperUser;
+        element('bootstrap').textContent = context.firstSuperUser
+          ? 'O primeiro Super Usuário será cadastrado com a conta autorizada: ' + context.firstSuperUser + '.'
+          : '';
+        element('retry-note').hidden = !context.retry;
+        show('welcome');
+      }).withFailureHandler(failure).obterContextoAssistenteInstalacaoPnp();
+    }
+
+    element('close').addEventListener('click', () => google.script.host.close());
+    element('next').addEventListener('click', () => show('review'));
+    element('back').addEventListener('click', () => show('welcome'));
+    element('reload').addEventListener('click', load);
+    element('consent').addEventListener('change', () => {
+      element('install').disabled = !element('consent').checked;
+    });
+    element('install').addEventListener('click', () => {
+      if (!element('consent').checked || element('install').disabled) return;
+      element('install').disabled = true;
+      show('running');
+      google.script.run.withSuccessHandler(result => {
+        element('done-title').textContent = result.status === 'already_installed'
+          ? 'O PNP já está instalado nesta cópia.' : 'Instalação concluída!';
+        show('done');
+      }).withFailureHandler(failure).executarInstalacaoPnp();
+    });
+    load();
+  </script>
+</body>
+</html>

@@ -7,6 +7,7 @@ const PNP_INSTALADORA_CONFIG = Object.freeze({
   sheetName: 'INSTALADORA',
   rows: 40,
   columns: 8,
+  recordCell: 'A40',
   colors: Object.freeze({
     background: '#f0fdf4',
     primary: '#166534',
@@ -26,6 +27,7 @@ function onOpen(e) {
   SpreadsheetApp.getUi()
     .createMenu('PNP')
     .addItem('Preparar planilha instaladora', 'prepararPlanilhaInstaladora')
+    .addItem('Iniciar assistente de instalação', 'iniciarAssistenteInstalacao')
     .addToUi();
 }
 
@@ -89,6 +91,15 @@ function prepararPlanilhaInstaladora() {
     originalSheets.forEach(function(sheet) { spreadsheet.deleteSheet(sheet); });
     guide.setName(PNP_INSTALADORA_CONFIG.sheetName);
     spreadsheet.moveActiveSheet(1);
+    // O registro só existe depois de a preparação ser concluída. Ele acompanha
+    // a cópia completa do arquivo e conserva o ID do modelo de origem.
+    salvarRegistroInstaladoraPnp_(guide, {
+      kind: 'PNP_INSTALLER',
+      version: 1,
+      sourceSpreadsheetId: spreadsheet.getId(),
+      preparedAt: new Date().toISOString(),
+      installation: null
+    });
     SpreadsheetApp.flush();
   } catch (error) {
     if (guide && !deletionStarted) spreadsheet.deleteSheet(guide);
@@ -146,7 +157,8 @@ function formatarAbaInstaladoraPnp_(sheet) {
     .setFontWeight('bold')
     .setHorizontalAlignment('center');
   escreverBlocoInstaladoraPnp_(sheet, 'B4:G5',
-    'Bem-vindo(a)! Este é o modelo instalador do sistema Professores no Painel. '
+    'Bem-vindo(a) ao Professores no Painel (PNP)! '
+      + 'Este é o modelo instalador do sistema. '
       + 'Use-o para criar uma nova instalação em uma cópia desta planilha.')
     .setHorizontalAlignment('center');
   escreverBlocoInstaladoraPnp_(sheet, 'B7:G9',
@@ -176,10 +188,10 @@ function formatarAbaInstaladoraPnp_(sheet) {
     {
       titleRange: 'B21:G21', bodyRange: 'B22:G25',
       title: '3. INICIE A INSTALAÇÃO NA SUA CÓPIA',
-      body: 'A instalação deve ser iniciada na cópia por uma conta autorizada do PNP. '
-        + 'Siga as orientações do responsável pela instalação e autorize as permissões '
-        + 'solicitadas pelo Google. As abas e estruturas do sistema devem ser criadas '
-        + 'nessa cópia, preservando a planilha modelo.'
+      body: 'Na cópia, acesse PNP > Iniciar assistente de instalação. '
+        + 'Confira o arquivo e a conta apresentados, avance e confirme a instalação. '
+        + 'Autorize as permissões solicitadas pelo Google. O assistente bloqueia '
+        + 'a instalação no modelo original e em arquivos sem preparação concluída.'
     },
     {
       titleRange: 'B27:G27', bodyRange: 'B28:G30',
@@ -214,4 +226,41 @@ function formatarAbaInstaladoraPnp_(sheet) {
 
 function escreverBlocoInstaladoraPnp_(sheet, address, text) {
   return sheet.getRange(address).merge().setValue(text);
+}
+
+/** Mantém a origem e o andamento dentro do arquivo, inclusive ao fazer cópia. */
+function salvarRegistroInstaladoraPnp_(sheet, record) {
+  sheet.getRange(PNP_INSTALADORA_CONFIG.recordCell).setValue(JSON.stringify(record));
+  sheet.hideRows(PNP_INSTALADORA_CONFIG.rows);
+}
+
+/** Validação compartilhada pelo assistente e pelos pontos de entrada antigos. */
+function validarRequisitosInstalacaoPnp_() {
+  const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  if (!spreadsheet) throw new Error('Abra uma cópia da planilha instaladora do PNP.');
+  const sheet = spreadsheet.getSheetByName(PNP_INSTALADORA_CONFIG.sheetName);
+  let record = null;
+  try {
+    record = sheet && JSON.parse(sheet.getRange(PNP_INSTALADORA_CONFIG.recordCell).getValue());
+  } catch (error) {
+    // Registros ausentes, antigos ou inválidos nunca comprovam preparação.
+  }
+  if (!record || record.kind !== 'PNP_INSTALLER' || record.version !== 1
+      || typeof record.sourceSpreadsheetId !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(record.sourceSpreadsheetId)
+      || typeof record.preparedAt !== 'string' || !Number.isFinite(Date.parse(record.preparedAt))) {
+    throw new Error('A preparação da planilha instaladora não foi concluída ou é de uma versão antiga. '
+      + 'No modelo, execute PNP > Preparar planilha instaladora e depois use '
+      + 'Arquivo > Fazer uma cópia. Inicie a instalação nessa nova cópia.');
+  }
+  if (record.sourceSpreadsheetId === spreadsheet.getId()) {
+    throw new Error('A instalação no modelo original não é permitida. '
+      + 'Use Arquivo > Fazer uma cópia, abra a cópia e acesse '
+      + 'PNP > Iniciar assistente de instalação.');
+  }
+  if (record.installation && (record.installation.spreadsheetId !== spreadsheet.getId()
+      || ['installing', 'failed', 'installed'].indexOf(record.installation.status) < 0)) {
+    throw new Error('Este arquivo é uma cópia de uma instalação já iniciada. '
+      + 'Para uma nova instalação, faça uma cópia da planilha modelo preparada.');
+  }
+  return { spreadsheet: spreadsheet, sheet: sheet, record: record };
 }

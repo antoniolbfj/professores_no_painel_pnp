@@ -280,14 +280,15 @@ const AccessControlService = {
 
   /**
    * Autoriza a primeira instalação somente para a conta bootstrap. Depois da
-   * criação da aba USUARIOS, exige perfil Super Usuário ativo.
+   * criação do primeiro cadastro, exige perfil Super Usuário ativo.
+   * Uma aba USUARIOS ainda vazia permite retomar a instalação interrompida.
    */
   requireSetupPrivilege: function() {
     const email = AccessControlService.getActiveEmail();
     AccessControlService.assertInstitutionalEmail(email);
     const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
     const sheet = spreadsheet && spreadsheet.getSheetByName(ACCESS_CONTROL_CONFIG.userSheetName);
-    if (!sheet) {
+    if (!sheet || AccessControlService.readUsers().length === 0) {
       if (email !== ACCESS_CONTROL_CONFIG.firstSuperUser.email) {
         throw new Error('Somente o primeiro Super Usuário pode executar a instalação inicial.');
       }

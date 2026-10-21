@@ -51,21 +51,12 @@ function obterPlanoInstalacaoVersao1009() {
 }
 
 /**
- * Cria somente as estruturas necessárias e valida o módulo da Ema.
- * Não insere catálogo de áreas, usuário inicial ou qualquer linha de dados.
+ * Instala o PNP somente em uma cópia de um modelo preparado.
+ * O coordenador cria as estruturas, cadastra a conta bootstrap autorizada na
+ * primeira instalação e valida o módulo da Ema, sem importar dados acadêmicos.
  */
 function instalarVersao10() {
-  AccessControlService.requireSetupPrivilege();
-  const plan = obterPlanoInstalacaoVersao10();
-  const structures = criarEstruturasVersao10_();
-  const smoke = executarSmokeTestVersao10();
-  return {
-    version: SETUP_V10_CONFIG.version,
-    structureOnly: plan.structureOnly,
-    installationPlan: plan,
-    structures: structures,
-    helpAssistant: smoke
-  };
+  return executarInstalacaoProtegidaPnp_();
 }
 
 /** Ponto de entrada recomendado pelo instalador da versão 10.0.5. */
@@ -98,6 +89,8 @@ function instalarVersao1009() {
  * Cria somente abas e cabeçalhos ausentes; registros existentes são preservados.
  */
 function criarEstruturasVersao10_() {
+  validarRequisitosInstalacaoPnp_();
+  AccessControlService.requireSetupPrivilege();
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   if (!spreadsheet) throw new Error('Nenhuma planilha ativa foi encontrada.');
   const definitions = [
@@ -208,7 +201,12 @@ function formatarEstruturaVersao10_(sheet, definition) {
     .setFontColor(SETUP_V10_CONFIG.headerFontColor)
     .setWrap(true);
   definition.checkboxColumns.forEach(function(column) {
-    sheet.getRange(2, column, SETUP_V10_CONFIG.minimumRows, 1).insertCheckboxes();
+    // insertCheckboxes() redefine os valores; uma retomada deve preservar
+    // os indicadores existentes, inclusive o Super Usuário já cadastrado.
+    const range = sheet.getRange(2, column, SETUP_V10_CONFIG.minimumRows, 1);
+    const values = range.getValues();
+    range.insertCheckboxes();
+    range.setValues(values);
   });
   sheet.autoResizeColumns(1, requiredColumns);
 }
