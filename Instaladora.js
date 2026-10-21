@@ -5,6 +5,7 @@
 
 const PNP_INSTALADORA_CONFIG = Object.freeze({
   sheetName: 'INSTALADORA',
+  installedSheetName: 'PNP INSTALADA',
   rows: 40,
   columns: 8,
   recordCell: 'A40',
@@ -228,6 +229,44 @@ function escreverBlocoInstaladoraPnp_(sheet, address, text) {
   return sheet.getRange(address).merge().setValue(text);
 }
 
+/** Substitui as instruções do modelo pela apresentação da instalação pronta. */
+function formatarAbaPnpInstalada_(sheet) {
+  const colors = PNP_INSTALADORA_CONFIG.colors;
+  const blocks = [
+    ['B4:G5', 'Bem-vindo(a) ao Professores no Painel (PNP)! '
+      + 'Esta planilha agora é uma instalação do sistema.'],
+    ['B7:G9', 'PNP INSTALADA — INSTALAÇÃO EM FUNCIONAMENTO\n'
+      + 'Esta planilha deixou de ser instaladora. As estruturas do PNP foram criadas '
+      + 'e esta é a base em funcionamento da sua instalação.'],
+    ['B11:G11', '1. SUA INSTALAÇÃO ESTÁ PRONTA'],
+    ['B12:G14', 'As tabelas do sistema foram criadas e estão ocultas. '
+      + 'Use esta planilha como base da sua instalação do Professores no Painel. '
+      + 'Após a implantação, o aplicativo usará essas tabelas para armazenar os dados.'],
+    ['B16:G16', '2. COMO IMPLANTAR O APLICATIVO'],
+    ['B17:G19', 'Abra Extensões > Apps Script nesta planilha. No editor, '
+      + 'clique em Implantar > Nova implantação e selecione o tipo Aplicativo da Web.'],
+    ['B21:G21', '3. CONFIGURE O ACESSO E IMPLANTE'],
+    ['B22:G25', 'Para identificar cada pessoa no PNP, selecione a execução como '
+      + 'o usuário que acessa o app da Web e restrinja o acesso ao domínio institucional. '
+      + 'Clique em Implantar, autorize as permissões solicitadas e guarde a URL do aplicativo. '
+      + 'Essa etapa pode ser realizada depois de fechar o assistente.'],
+    ['B27:G27', '4. UTILIZE O PROFESSORES NO PAINEL'],
+    ['B28:G30', 'Configure os acessos dos usuários, importe os dados necessários '
+      + 'e compartilhe a URL do aplicativo com as pessoas autorizadas. '
+      + 'A orientação de implantação é opcional e não bloqueia a conclusão da instalação.'],
+    ['B32:G35', 'PLANILHA EM USO\n'
+      + 'A opção Preparar planilha instaladora exclui as tabelas e seus dados. '
+      + 'Mantenha esta instalação para uso do sistema. Para uma nova instalação, '
+      + 'volte à planilha modelo original e faça outra cópia.'],
+    ['B37:G38', 'Professores no Painel • PNP\n'
+      + 'Instalação concluída. As tabelas do sistema permanecem ocultas.']
+  ];
+  blocks.forEach(function(block) {
+    escreverBlocoInstaladoraPnp_(sheet, block[0], block[1]);
+  });
+  sheet.getRange('B7:G9').setBackground(colors.primary).setFontColor(colors.white);
+}
+
 /** Mantém a origem e o andamento dentro do arquivo, inclusive ao fazer cópia. */
 function salvarRegistroInstaladoraPnp_(sheet, record) {
   sheet.getRange(PNP_INSTALADORA_CONFIG.recordCell).setValue(JSON.stringify(record));
@@ -238,7 +277,13 @@ function salvarRegistroInstaladoraPnp_(sheet, record) {
 function validarRequisitosInstalacaoPnp_() {
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   if (!spreadsheet) throw new Error('Abra uma cópia da planilha instaladora do PNP.');
-  const sheet = spreadsheet.getSheetByName(PNP_INSTALADORA_CONFIG.sheetName);
+  const installer = spreadsheet.getSheetByName(PNP_INSTALADORA_CONFIG.sheetName);
+  const installed = spreadsheet.getSheetByName(PNP_INSTALADORA_CONFIG.installedSheetName);
+  if (installer && installed) {
+    throw new Error('Existem abas INSTALADORA e PNP INSTALADA neste arquivo. '
+      + 'Resolva o conflito de nomes antes de continuar; nenhuma aba será substituída.');
+  }
+  const sheet = installer || installed;
   let record = null;
   try {
     record = sheet && JSON.parse(sheet.getRange(PNP_INSTALADORA_CONFIG.recordCell).getValue());

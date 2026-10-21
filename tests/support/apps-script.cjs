@@ -12,7 +12,9 @@ function simulate(options = {}) {
     releases: 0, lockAttempts: 0, insertions: 0,
     spreadsheetId: options.spreadsheetId || 'modelo-id',
     email: options.email || 'antoniobarros@iftm.edu.br',
-    failUserWrites: options.failUserWrites || 0
+    failUserWrites: options.failUserWrites || 0,
+    failInstalledViewWrites: options.failInstalledViewWrites || 0,
+    failHides: options.failHides || 0
   };
 
   function parseRange(args) {
@@ -32,6 +34,18 @@ function simulate(options = {}) {
       cells: new Map(), grid: new Map(), hiddenRows: new Set(),
       gridlinesHidden: false, frozenRows: 0,
       getSheetId() { return this.id; },
+      isSheetHidden() { return Boolean(this.hidden); },
+      showSheet() { this.hidden = false; return this; },
+      hideSheet() {
+        assert.ok(state.sheets.some(other => other !== this && !other.isSheetHidden()),
+          'A planilha precisa manter uma aba visível.');
+        if (state.failHides > 0 && this.name === 'DOCENTES_AREAS') {
+          state.failHides--;
+          throw new Error('Falha simulada ao ocultar uma tabela.');
+        }
+        this.hidden = true;
+        return this;
+      },
       getName() {
         assert.equal(this.deleted, false, 'Não consultar uma aba excluída.');
         return this.name;
@@ -74,6 +88,11 @@ function simulate(options = {}) {
           getDisplayValue() { return String(this.getValue()); },
           getDisplayValues() { return this.getValues().map(values => values.map(String)); },
           setValue(value) {
+            if (sheet.name === 'PNP INSTALADA' && args[0] === 'B4:G5'
+                && state.failInstalledViewWrites > 0) {
+              state.failInstalledViewWrites--;
+              throw new Error('Falha simulada ao finalizar a apresentação.');
+            }
             sheet.grid.set(row + ':' + col, value);
             if (typeof args[0] === 'string') sheet.cells.set(args[0], value);
             return this;
@@ -118,6 +137,7 @@ function simulate(options = {}) {
     sheet.hiddenRows = new Set(original.hiddenRows);
     sheet.rows = original.rows;
     sheet.columns = original.columns;
+    sheet.hidden = original.hidden;
   }
   state.originals = state.sheets.slice();
 
@@ -202,7 +222,7 @@ function simulate(options = {}) {
     start() { return this.evaluate('iniciarAssistenteInstalacao()'); },
     install() { return this.evaluate('executarInstalacaoPnp()'); },
     record() {
-      const sheet = spreadsheet.getSheetByName('INSTALADORA');
+      const sheet = spreadsheet.getSheetByName('INSTALADORA') || spreadsheet.getSheetByName('PNP INSTALADA');
       const raw = sheet && sheet.getRange('A40').getValue();
       return raw ? JSON.parse(raw) : null;
     },

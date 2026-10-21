@@ -89,10 +89,14 @@ function instalarVersao1009() {
  * Cria somente abas e cabeçalhos ausentes; registros existentes são preservados.
  */
 function criarEstruturasVersao10_() {
-  validarRequisitosInstalacaoPnp_();
+  const installationContext = validarRequisitosInstalacaoPnp_();
   AccessControlService.requireSetupPrivilege();
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   if (!spreadsheet) throw new Error('Nenhuma planilha ativa foi encontrada.');
+  // O Google exige pelo menos uma aba visível. A apresentação permanece
+  // disponível enquanto cada tabela do sistema é criada e ocultada.
+  installationContext.sheet.showSheet();
+  spreadsheet.setActiveSheet(installationContext.sheet);
   const definitions = [
     {
       name: KNOWLEDGE_AREAS_CONFIG.sheetName,
@@ -141,6 +145,7 @@ function criarEstruturasVersao10_() {
       result.preserved.push(definition.name);
     }
     formatarEstruturaVersao10_(sheet, definition);
+    sheet.hideSheet();
   });
   SpreadsheetApp.flush();
   return result;

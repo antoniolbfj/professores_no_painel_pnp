@@ -187,3 +187,88 @@ test('contratos existentes de estrutura e controle de acesso continuam válidos'
   app.evaluate('test_SetupVersao10_structureOnlyContract(); '
     + 'test_AccessControl_profileAndDomainContract(); test_AccessControl_areaPermissionMatrix();');
 });
+
+test('sucesso oculta as seis tabelas e transforma a apresentação em PNP INSTALADA', () => {
+  const copy = preparedCopy();
+  const guide = copy.spreadsheet.getSheetByName('INSTALADORA');
+  copy.install();
+  assert.equal(copy.spreadsheet.getSheetByName('INSTALADORA'), null);
+  assert.equal(copy.spreadsheet.getSheetByName('PNP INSTALADA'), guide);
+  assert.equal(guide.isSheetHidden(), false);
+  assert.equal(copy.state.active, guide);
+  assert.deepEqual(copy.state.sheets.filter(sheet => !sheet.isSheetHidden()).map(sheet => sheet.name),
+    ['PNP INSTALADA']);
+  const systemSheets = copy.state.sheets.filter(sheet => sheet !== guide);
+  assert.equal(systemSheets.length, 6);
+  assert.ok(systemSheets.every(sheet => sheet.isSheetHidden()));
+  const text = Array.from(guide.cells.values()).join('\n');
+  assert.match(text, /Esta planilha deixou de ser instaladora/);
+  assert.match(text, /INSTALAÇÃO EM FUNCIONAMENTO/);
+  assert.doesNotMatch(text, /CÓPIA OBRIGATÓRIA ANTES DA INSTALAÇÃO/);
+  assert.match(text, /Implantar > Nova implantação/);
+  assert.match(text, /Aplicativo da Web/);
+  assert.equal(copy.record().installation.status, 'installed');
+});
+
+test('a apresentação volta a ficar visível antes de ocultar as tabelas', () => {
+  const copy = preparedCopy();
+  const visible = copy.spreadsheet.insertSheet('Anotações');
+  copy.spreadsheet.getSheetByName('INSTALADORA').hideSheet();
+  copy.install();
+  assert.equal(copy.spreadsheet.getSheetByName('PNP INSTALADA').isSheetHidden(), false);
+  assert.equal(visible.isSheetHidden(), false, 'Não ocultar abas do usuário.');
+});
+
+test('falha antes da conclusão preserva INSTALADORA e permite retomar com tabelas ocultas', () => {
+  const copy = preparedCopy({ failHides: 1 });
+  assert.throws(() => copy.install(), /Falha simulada ao ocultar/);
+  assert.equal(copy.spreadsheet.getSheetByName('PNP INSTALADA'), null);
+  assert.equal(copy.spreadsheet.getSheetByName('INSTALADORA').isSheetHidden(), false);
+  assert.equal(copy.record().installation.status, 'failed');
+  assert.equal(copy.install().status, 'installed');
+  assert.equal(copy.state.sheets.filter(sheet => !sheet.isSheetHidden()).length, 1);
+});
+
+test('uma falha depois da renomeação permite retomar sem perder o registro de instalação', () => {
+  const copy = preparedCopy({ failInstalledViewWrites: 1 });
+  assert.throws(() => copy.install(), /Falha simulada ao finalizar/);
+  assert.equal(copy.record().installation.status, 'failed');
+  assert.ok(copy.spreadsheet.getSheetByName('PNP INSTALADA'));
+  assert.match(copy.spreadsheet.getSheetByName('PNP INSTALADA').getRange('B7:G9').getValue(),
+    /INSTALAÇÃO NÃO CONCLUÍDA/);
+  assert.equal(copy.install().status, 'installed');
+  assert.equal(copy.evaluate('AccessControlService.readUsers().length'), 1);
+});
+
+test('o assistente reaberto reconhece PNP INSTALADA e não reinstala', () => {
+  const copy = preparedCopy();
+  copy.install();
+  const insertions = copy.state.insertions;
+  assert.equal(copy.start().status, 'opened');
+  assert.equal(copy.evaluate('obterContextoAssistenteInstalacaoPnp().installed'), true);
+  assert.equal(copy.install().status, 'already_installed');
+  assert.equal(copy.state.insertions, insertions);
+});
+
+test('instalação concluída com a apresentação antiga recebe a nova apresentação sem recriar dados', () => {
+  const copy = preparedCopy();
+  copy.install();
+  copy.spreadsheet.getSheetByName('PNP INSTALADA').setName('INSTALADORA');
+  copy.state.sheets.forEach(sheet => sheet.showSheet());
+  const record = copy.record();
+  const insertions = copy.state.insertions;
+  assert.equal(copy.install().status, 'already_installed');
+  assert.equal(copy.state.insertions, insertions);
+  assert.deepEqual(copy.record(), record);
+  assert.ok(copy.spreadsheet.getSheetByName('PNP INSTALADA'));
+  assert.equal(copy.state.sheets.filter(sheet => !sheet.isSheetHidden()).length, 1);
+});
+
+test('conflito com uma aba PNP INSTALADA existente bloqueia a instalação sem substituir dados', () => {
+  const copy = preparedCopy();
+  const existing = copy.spreadsheet.insertSheet('PNP INSTALADA');
+  existing.getRange('A1').setValue('Dados do usuário');
+  assert.throws(() => copy.install(), /conflito de nomes/);
+  assert.equal(existing.getRange('A1').getValue(), 'Dados do usuário');
+  assert.equal(copy.spreadsheet.getSheetByName('USUARIOS'), null);
+});

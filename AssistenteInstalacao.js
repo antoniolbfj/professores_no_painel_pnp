@@ -30,14 +30,7 @@ function obterContextoAssistenteInstalacaoPnp() {
     installed: Boolean(installation && installation.status === 'installed'),
     retry: Boolean(installation && installation.status !== 'installed'),
     firstSuperUser: actor.bootstrap ? ACCESS_CONTROL_CONFIG.firstSuperUser.email : '',
-    sheets: [
-      KNOWLEDGE_AREAS_CONFIG.sheetName,
-      TEACHER_AREAS_CONFIG.associationSheetName,
-      TEACHER_AREAS_CONFIG.controlSheetName,
-      TEACHER_CONDITIONS_CONFIG.sheetName,
-      ACCESS_CONTROL_CONFIG.userSheetName,
-      ACCESS_CONTROL_CONFIG.auditSheetName
-    ]
+    sheets: listarTabelasInstalacaoPnp_()
   };
 }
 
@@ -62,6 +55,9 @@ function executarInstalacaoProtegidaPnp_() {
     context = validarRequisitosInstalacaoPnp_();
     const actor = AccessControlService.requireSetupPrivilege();
     if (context.record.installation && context.record.installation.status === 'installed') {
+      // A apresentação pode ser reaplicada após uma atualização ou interrupção,
+      // sem reinstalar ou alterar os registros das tabelas.
+      finalizarApresentacaoInstalacaoPnp_(context);
       return { status: 'already_installed', version: SETUP_V10_CONFIG.version };
     }
     context.record.installation = {
@@ -86,6 +82,7 @@ function executarInstalacaoProtegidaPnp_() {
       initialSuperUserCreated = true;
     }
     const smoke = executarSmokeTestVersao10();
+    finalizarApresentacaoInstalacaoPnp_(context);
     context.record.installation.status = 'installed';
     context.record.installation.finishedAt = new Date().toISOString();
     salvarRegistroInstaladoraPnp_(context.sheet, context.record);
@@ -103,6 +100,9 @@ function executarInstalacaoProtegidaPnp_() {
       context.record.installation.status = 'failed';
       try {
         salvarRegistroInstaladoraPnp_(context.sheet, context.record);
+        context.sheet.getRange('B7:G9').setValue('INSTALAÇÃO NÃO CONCLUÍDA\n'
+          + 'A tentativa foi interrompida. Abra PNP > Iniciar assistente de instalação '
+          + 'para conferir o arquivo e retomar a instalação.');
       } catch (recordError) {
         Logger.log('Não foi possível registrar a interrupção da instalação: ' + recordError.message);
       }
@@ -111,4 +111,27 @@ function executarInstalacaoProtegidaPnp_() {
   } finally {
     lock.releaseLock();
   }
+}
+
+/** Mantém a apresentação visível e conclui a transição de modelo para instalação. */
+function finalizarApresentacaoInstalacaoPnp_(context) {
+  context.sheet.showSheet();
+  context.spreadsheet.setActiveSheet(context.sheet);
+  context.sheet.setName(PNP_INSTALADORA_CONFIG.installedSheetName);
+  formatarAbaPnpInstalada_(context.sheet);
+  listarTabelasInstalacaoPnp_().forEach(function(name) {
+    context.spreadsheet.getSheetByName(name).hideSheet();
+  });
+  context.spreadsheet.moveActiveSheet(1);
+}
+
+function listarTabelasInstalacaoPnp_() {
+  return [
+    KNOWLEDGE_AREAS_CONFIG.sheetName,
+    TEACHER_AREAS_CONFIG.associationSheetName,
+    TEACHER_AREAS_CONFIG.controlSheetName,
+    TEACHER_CONDITIONS_CONFIG.sheetName,
+    ACCESS_CONTROL_CONFIG.userSheetName,
+    ACCESS_CONTROL_CONFIG.auditSheetName
+  ];
 }

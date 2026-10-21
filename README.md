@@ -39,11 +39,16 @@ A preparação funciona antes da criação de `USUARIOS` e não depende do cadas
 1. Após preparar o modelo, use **Arquivo > Fazer uma cópia**. Abra o arquivo criado e recarregue a planilha para visualizar o menu PNP.
 2. Na cópia, escolha **PNP > Iniciar assistente de instalação**. O assistente apresenta as boas-vindas ao **Professores no Painel (PNP)** e confere a preparação, a cópia e a conta autorizada.
 3. Clique em **Continuar**, confira a planilha de destino, a conta e as seis abas previstas. Marque a confirmação e clique em **Instalar PNP**.
-4. Aguarde a criação/validação das estruturas e a verificação final. Após a conclusão, configure os acessos e importe os dados necessários ao sistema. A publicação do aplicativo web continua sendo uma etapa separada.
+4. Aguarde a criação/validação das estruturas e a verificação final. As seis tabelas ficam ocultas e a apresentação é renomeada de **INSTALADORA** para **PNP INSTALADA**, com uma mensagem de que a planilha passou a ser a base de uma instalação em funcionamento.
+5. Após a conclusão, o botão **Como implantar** abre a terceira etapa, com orientação para publicar o aplicativo web. Essa etapa é opcional: fechar o assistente mantém a instalação concluída. Configure os acessos e importe os dados necessários ao sistema.
 
-A preparação registra o ID do arquivo modelo em uma linha oculta da aba `INSTALADORA`. Esse registro acompanha a cópia completa do arquivo. O servidor exige um registro válido e um ID de arquivo diferente do modelo antes de abrir o assistente e novamente antes de instalar. Apenas renomear o arquivo, criar uma aba `INSTALADORA` manualmente ou copiar um arquivo sem preparação concluída não atende aos requisitos.
+A preparação registra o ID do arquivo modelo em uma linha oculta da aba `INSTALADORA`. Esse registro acompanha a cópia completa do arquivo e permanece na apresentação **PNP INSTALADA** após a conclusão. O servidor reconhece os dois nomes e exige um registro válido e um ID de arquivo diferente do modelo antes de abrir o assistente e novamente antes de instalar. Apenas renomear o arquivo, criar uma aba `INSTALADORA` manualmente ou copiar um arquivo sem preparação concluída não atende aos requisitos.
 
 As mesmas verificações se aplicam a `instalarVersao10()`, aos aliases `instalarVersao1005()` a `instalarVersao1009()` e à rotina interna de criação de estruturas. Uma instalação já concluída não é repetida; uma tentativa interrompida pode ser retomada na mesma cópia, preservando os registros e sem duplicar o primeiro usuário. Para criar outra instalação, copie novamente o modelo preparado, pois cópias de uma instalação já iniciada são bloqueadas.
+
+A apresentação permanece visível enquanto as tabelas do sistema são ocultadas. Abas adicionais criadas pelo usuário são preservadas. Ao solicitar novamente uma instalação já concluída, somente a apresentação e a visibilidade das tabelas são reaplicadas. Conflitos entre abas `INSTALADORA` e `PNP INSTALADA` bloqueiam a operação antes de substituir qualquer aba.
+
+A orientação de implantação descreve **Extensões > Apps Script > Implantar > Nova implantação > Aplicativo da Web**, com execução como o usuário que acessa o aplicativo e acesso restrito ao domínio institucional, conforme o controle de acesso do PNP. A criação da implantação e a autorização são realizadas manualmente pelo responsável; o assistente não publica nem verifica a implantação. A orientação também fica disponível na aba **PNP INSTALADA**.
 
 Na primeira instalação, a conta autorizada continua sendo a definida em `ACCESS_CONTROL_CONFIG.firstSuperUser`. O coordenador cadastra essa conta como Super Usuário ativo depois de criar as estruturas e antes da verificação final. O plano estrutural permanece sem importação de dados acadêmicos nem catálogo inicial de áreas. Uma aba `USUARIOS` ainda vazia também permite a retomada pela conta inicial autorizada.
 
@@ -56,7 +61,7 @@ node --test tests/instaladora.test.cjs
 node --test tests/assistente-instalacao.test.cjs
 ```
 
-Os testes executam o código do projeto com serviços do Apps Script simulados. Cobrem preparação, cancelamento, exclusão das abas, registro de origem, bloqueios no modelo e sem preparação, chamadas diretas, instalação completa, cadastro inicial, concorrência, retomada e repetição após sucesso. A cópia real do arquivo e a autorização do Google devem ser conferidas em uma planilha descartável no Google Planilhas.
+Os testes executam o código do projeto com serviços do Apps Script simulados. Cobrem preparação, cancelamento, exclusão das abas, registro de origem, bloqueios no modelo e sem preparação, chamadas diretas, instalação completa, cadastro inicial, concorrência, retomada, tabelas ocultas, transição para **PNP INSTALADA**, conflitos de nomes e repetição após sucesso. A cópia real do arquivo e a autorização do Google devem ser conferidas em uma planilha descartável no Google Planilhas.
 
 ## Estrutura
 

@@ -49,7 +49,7 @@
     <div id="error" class="error" role="alert" hidden></div>
 
     <section id="welcome" hidden>
-      <div class="steps">Etapa 1 de 2 · Boas-vindas</div>
+      <div class="steps">Etapa 1 de 3 · Boas-vindas</div>
       <h1>Bem-vindo(a) ao Professores no Painel (PNP)!</h1>
       <p>Vamos preparar sua nova instalação nesta cópia da planilha.</p>
       <div class="card">
@@ -62,7 +62,7 @@
     </section>
 
     <section id="review" hidden>
-      <div class="steps">Etapa 2 de 2 · Confira e confirme</div>
+      <div class="steps">Etapa 2 de 3 · Confira e confirme</div>
       <h2>Instalar o PNP nesta cópia</h2>
       <div class="card">
         <dl>
@@ -73,6 +73,8 @@
       </div>
       <p>Serão criadas ou validadas as seguintes abas:</p>
       <ul id="sheet-list"></ul>
+      <p class="muted">As tabelas ficarão ocultas. Ao concluir, a aba de apresentação
+        passará a se chamar PNP INSTALADA.</p>
       <p id="bootstrap" class="muted" hidden></p>
       <p id="retry-note" class="muted" hidden>A tentativa anterior não foi concluída.
         O assistente retomará a preparação preservando os registros existentes.</p>
@@ -91,7 +93,30 @@
     <section id="done" role="status" aria-live="polite" hidden>
       <h2 id="done-title">Instalação concluída!</h2>
       <p>A estrutura do Professores no Painel (PNP) está pronta nesta planilha.</p>
+      <p>A aba de apresentação agora se chama <strong>PNP INSTALADA</strong> e as
+        tabelas do sistema estão ocultas.</p>
       <p>Continue com a configuração dos acessos e a importação dos dados da sua instalação.</p>
+      <p class="muted">Você pode ver a orientação de implantação ou fechar o assistente.
+        A instalação já foi concluída.</p>
+    </section>
+
+    <section id="deployment" hidden>
+      <div class="steps">Etapa 3 de 3 · Orientação opcional</div>
+      <h2>Como implantar sua instalação</h2>
+      <p class="check">A instalação do PNP já está concluída.</p>
+      <ol>
+        <li>Na planilha instalada, abra <strong>Extensões > Apps Script</strong>.</li>
+        <li>Clique em <strong>Implantar > Nova implantação</strong> e selecione
+          o tipo <strong>Aplicativo da Web</strong>.</li>
+        <li>Para o controle de acesso do PNP identificar cada pessoa, selecione
+          a execução como <strong>usuário que acessa o app da Web</strong>
+          e restrinja o acesso ao domínio institucional.</li>
+        <li>Clique em <strong>Implantar</strong>, autorize as permissões solicitadas
+          pelo Google e copie a URL do aplicativo.</li>
+        <li>Compartilhe a URL com as pessoas autorizadas a utilizar esta instalação.</li>
+      </ol>
+      <div class="card">Esta etapa é apenas uma orientação. Você pode fechar
+        o assistente e realizar a implantação depois. A instalação continuará concluída.</div>
     </section>
   </main>
 
@@ -100,20 +125,24 @@
     <button id="back" type="button" hidden>Voltar</button>
     <button id="reload" type="button" hidden>Conferir novamente</button>
     <button id="next" class="primary" type="button" hidden>Continuar</button>
+    <button id="deployment-help" class="primary" type="button" hidden>Como implantar</button>
     <button id="install" class="primary" type="button" disabled hidden>Instalar PNP</button>
   </div>
 
   <script>
     'use strict';
     const element = id => document.getElementById(id);
-    const sections = ['loading', 'welcome', 'review', 'running', 'done'];
+    const sections = ['loading', 'welcome', 'review', 'running', 'done', 'deployment'];
+    let currentSection = 'loading';
 
     function show(section) {
+      currentSection = section;
       sections.forEach(id => { element(id).hidden = id !== section; });
       element('error').hidden = true;
       element('reload').hidden = true;
       element('next').hidden = section !== 'welcome';
-      element('back').hidden = section !== 'review';
+      element('back').hidden = section !== 'review' && section !== 'deployment';
+      element('deployment-help').hidden = section !== 'done';
       element('install').hidden = section !== 'review';
       element('close').disabled = section === 'running';
     }
@@ -155,7 +184,10 @@
 
     element('close').addEventListener('click', () => google.script.host.close());
     element('next').addEventListener('click', () => show('review'));
-    element('back').addEventListener('click', () => show('welcome'));
+    element('back').addEventListener('click', () => {
+      show(currentSection === 'deployment' ? 'done' : 'welcome');
+    });
+    element('deployment-help').addEventListener('click', () => show('deployment'));
     element('reload').addEventListener('click', load);
     element('consent').addEventListener('change', () => {
       element('install').disabled = !element('consent').checked;
