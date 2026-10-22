@@ -27,7 +27,6 @@ function obterContextoAssistenteInstalacaoPnp() {
     spreadsheetName: context.spreadsheet.getName(),
     email: actor.email,
     version: SETUP_V10_CONFIG.version,
-    installed: Boolean(installation && installation.status === 'installed'),
     retry: Boolean(installation && installation.status !== 'installed'),
     firstSuperUser: actor.bootstrap ? ACCESS_CONTROL_CONFIG.firstSuperUser.email : '',
     sheets: listarTabelasInstalacaoPnp_()
@@ -54,12 +53,6 @@ function executarInstalacaoProtegidaPnp_() {
   try {
     context = validarRequisitosInstalacaoPnp_();
     const actor = AccessControlService.requireSetupPrivilege();
-    if (context.record.installation && context.record.installation.status === 'installed') {
-      // A apresentação pode ser reaplicada após uma atualização ou interrupção,
-      // sem reinstalar ou alterar os registros das tabelas.
-      finalizarApresentacaoInstalacaoPnp_(context);
-      return { status: 'already_installed', version: SETUP_V10_CONFIG.version };
-    }
     context.record.installation = {
       status: 'installing',
       spreadsheetId: context.spreadsheet.getId(),
@@ -87,6 +80,7 @@ function executarInstalacaoProtegidaPnp_() {
     context.record.installation.finishedAt = new Date().toISOString();
     salvarRegistroInstaladoraPnp_(context.sheet, context.record);
     SpreadsheetApp.flush();
+    registrarInstalacaoVigentePnp_(context.spreadsheet);
     return {
       status: 'installed',
       version: SETUP_V10_CONFIG.version,
@@ -103,6 +97,7 @@ function executarInstalacaoProtegidaPnp_() {
         context.sheet.getRange('B7:G9').setValue('INSTALAÇÃO NÃO CONCLUÍDA\n'
           + 'A tentativa foi interrompida. Abra PNP > Iniciar assistente de instalação '
           + 'para conferir o arquivo e retomar a instalação.');
+        SpreadsheetApp.flush();
       } catch (recordError) {
         Logger.log('Não foi possível registrar a interrupção da instalação: ' + recordError.message);
       }

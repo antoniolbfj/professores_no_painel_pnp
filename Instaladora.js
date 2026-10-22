@@ -6,6 +6,7 @@
 const PNP_INSTALADORA_CONFIG = Object.freeze({
   sheetName: 'INSTALADORA',
   installedSheetName: 'PNP INSTALADA',
+  installedPropertyPrefix: 'PNP_INSTALACAO_VIGENTE_',
   rows: 40,
   columns: 8,
   recordCell: 'A40',
@@ -48,6 +49,12 @@ function prepararPlanilhaInstaladora() {
   }
 
   const ui = SpreadsheetApp.getUi();
+  try {
+    exigirPlanilhaSemInstalacaoVigentePnp_(spreadsheet);
+  } catch (error) {
+    ui.alert('Preparação não permitida', error.message, ui.ButtonSet.OK);
+    return { status: 'blocked', message: error.message };
+  }
   const originalSheets = spreadsheet.getSheets();
   const originalNames = originalSheets.map(function(sheet) { return sheet.getName(); });
   const originalIds = originalSheets.map(function(sheet) {
@@ -73,6 +80,8 @@ function prepararPlanilhaInstaladora() {
   let guide = null;
   let deletionStarted = false;
   try {
+    // A instalação pode ter terminado enquanto a confirmação estava aberta.
+    exigirPlanilhaSemInstalacaoVigentePnp_(spreadsheet);
     const currentIds = spreadsheet.getSheets().map(function(sheet) {
       return sheet.getSheetId();
     }).sort().join(',');
@@ -254,10 +263,10 @@ function formatarAbaPnpInstalada_(sheet) {
     ['B28:G30', 'Configure os acessos dos usuários, importe os dados necessários '
       + 'e compartilhe a URL do aplicativo com as pessoas autorizadas. '
       + 'A orientação de implantação é opcional e não bloqueia a conclusão da instalação.'],
-    ['B32:G35', 'PLANILHA EM USO\n'
-      + 'A opção Preparar planilha instaladora exclui as tabelas e seus dados. '
-      + 'Mantenha esta instalação para uso do sistema. Para uma nova instalação, '
-      + 'volte à planilha modelo original e faça outra cópia.'],
+    ['B32:G35', 'INSTALAÇÃO PROTEGIDA\n'
+      + 'A preparação de instalador e o assistente de instalação ficam bloqueados '
+      + 'nesta planilha. Para uma nova instalação, faça outra cópia da planilha '
+      + 'instaladora original. Mantenha esta instalação para uso do PNP.'],
     ['B37:G38', 'Professores no Painel • PNP\n'
       + 'Instalação concluída. As tabelas do sistema permanecem ocultas.']
   ];
@@ -273,10 +282,48 @@ function salvarRegistroInstaladoraPnp_(sheet, record) {
   sheet.hideRows(PNP_INSTALADORA_CONFIG.rows);
 }
 
+/** Marca o arquivo concluído fora das células, sem armazenar qualquer segredo. */
+function registrarInstalacaoVigentePnp_(spreadsheet) {
+  PropertiesService.getScriptProperties().setProperty(
+    PNP_INSTALADORA_CONFIG.installedPropertyPrefix + spreadsheet.getId(),
+    'installed'
+  );
+}
+
+/**
+ * Bloqueia operações de instalador em uma instalação vigente, mesmo que a aba
+ * de apresentação tenha sido renomeada ou removida. O ID evita confundir o
+ * modelo e suas cópias caso propriedades do projeto sejam copiadas também.
+ */
+function exigirPlanilhaSemInstalacaoVigentePnp_(spreadsheet) {
+  const persistent = PropertiesService.getScriptProperties().getProperty(
+    PNP_INSTALADORA_CONFIG.installedPropertyPrefix + spreadsheet.getId()
+  );
+  const installed = persistent === 'installed' || spreadsheet.getSheets().some(function(sheet) {
+    // Compatibilidade com instalações anteriores à propriedade persistente e
+    // bloqueio de cópias de uma instalação, inclusive com a aba renomeada.
+    if (sheet.getMaxRows() < PNP_INSTALADORA_CONFIG.rows) return false;
+    let record;
+    try {
+      record = JSON.parse(sheet.getRange(PNP_INSTALADORA_CONFIG.recordCell).getValue());
+    } catch (error) {
+      return false;
+    }
+    return record && record.kind === 'PNP_INSTALLER'
+      && record.installation && record.installation.status === 'installed';
+  });
+  if (installed) {
+    throw new Error('Esta planilha já possui uma instalação vigente do Professores no Painel (PNP). '
+      + 'Preparar instalador e iniciar o assistente estão bloqueados para preservar a instalação. '
+      + 'Para criar uma nova instalação, faça uma nova cópia da planilha instaladora original.');
+  }
+}
+
 /** Validação compartilhada pelo assistente e pelos pontos de entrada antigos. */
 function validarRequisitosInstalacaoPnp_() {
   const spreadsheet = SpreadsheetApp.getActiveSpreadsheet();
   if (!spreadsheet) throw new Error('Abra uma cópia da planilha instaladora do PNP.');
+  exigirPlanilhaSemInstalacaoVigentePnp_(spreadsheet);
   const installer = spreadsheet.getSheetByName(PNP_INSTALADORA_CONFIG.sheetName);
   const installed = spreadsheet.getSheetByName(PNP_INSTALADORA_CONFIG.installedSheetName);
   if (installer && installed) {

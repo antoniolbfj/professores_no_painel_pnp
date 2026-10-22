@@ -159,11 +159,6 @@
       element('consent').checked = false;
       element('install').disabled = true;
       google.script.run.withSuccessHandler(context => {
-        if (context.installed) {
-          element('done-title').textContent = 'O PNP já está instalado nesta cópia.';
-          show('done');
-          return;
-        }
         element('spreadsheet-name').textContent = context.spreadsheetName;
         element('account').textContent = context.email;
         element('version').textContent = context.version;
@@ -196,9 +191,8 @@
       if (!element('consent').checked || element('install').disabled) return;
       element('install').disabled = true;
       show('running');
-      google.script.run.withSuccessHandler(result => {
-        element('done-title').textContent = result.status === 'already_installed'
-          ? 'O PNP já está instalado nesta cópia.' : 'Instalação concluída!';
+      google.script.run.withSuccessHandler(() => {
+        element('done-title').textContent = 'Instalação concluída!';
         show('done');
       }).withFailureHandler(failure).executarInstalacaoPnp();
     });

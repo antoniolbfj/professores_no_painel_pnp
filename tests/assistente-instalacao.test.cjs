@@ -8,6 +8,13 @@ function preparedCopy(options = {}) {
   return model.copy('copia-id', options);
 }
 
+function snapshotWorkbook(app) {
+  return JSON.stringify(app.state.sheets.map(sheet => ({
+    id: sheet.id, name: sheet.name, hidden: sheet.isSheetHidden(),
+    grid: Array.from(sheet.grid), hiddenRows: Array.from(sheet.hiddenRows)
+  })));
+}
+
 test('preparação concluída registra o ID do modelo em uma linha oculta que acompanha a cópia', () => {
   const model = simulate();
   model.prepare();
@@ -65,7 +72,6 @@ test('cópia preparada abre o assistente com boas-vindas ao PNP e não instala a
   const context = copy.evaluate('obterContextoAssistenteInstalacaoPnp()');
   assert.equal(context.email, 'antoniobarros@iftm.edu.br');
   assert.equal(context.firstSuperUser, context.email);
-  assert.equal(context.installed, false);
   assert.equal(context.sheets.length, 6);
 });
 
@@ -128,16 +134,18 @@ test('operação concorrente bloqueia antes de gravar o andamento', () => {
   assert.equal(copy.state.sheets.length, 1);
 });
 
-test('nova chamada após sucesso informa instalação existente sem recriar estruturas ou usuários', () => {
+test('nova chamada após sucesso bloqueia antes de alterar a instalação vigente', () => {
   const copy = preparedCopy();
   copy.install();
   const previousInsertions = copy.state.insertions;
   const record = copy.record();
-  assert.equal(copy.install().status, 'already_installed');
+  const before = snapshotWorkbook(copy);
+  assert.throws(() => copy.install(), /instalação vigente/);
   assert.equal(copy.state.insertions, previousInsertions);
   assert.deepEqual(copy.record(), record);
+  assert.equal(snapshotWorkbook(copy), before);
   assert.equal(copy.evaluate('AccessControlService.readUsers().length'), 1);
-  assert.equal(copy.evaluate('obterContextoAssistenteInstalacaoPnp().installed'), true);
+  assert.throws(() => copy.evaluate('obterContextoAssistenteInstalacaoPnp()'), /instalação vigente/);
 });
 
 test('retomada após falha no cadastro funciona com USUARIOS ainda vazia', () => {
@@ -169,7 +177,8 @@ test('copiar uma instalação já iniciada não equivale a copiar o modelo prepa
   const installed = preparedCopy();
   installed.install();
   const other = installed.copy('outra-copia-id');
-  assert.throws(() => other.install(), /cópia de uma instalação já iniciada/);
+  assert.throws(() => other.install(), /instalação vigente/);
+  assert.equal(other.prepare().status, 'blocked');
   assert.equal(other.start().status, 'blocked');
   assert.equal(other.state.insertions, 0);
 });
@@ -240,28 +249,33 @@ test('uma falha depois da renomeação permite retomar sem perder o registro de 
   assert.equal(copy.evaluate('AccessControlService.readUsers().length'), 1);
 });
 
-test('o assistente reaberto reconhece PNP INSTALADA e não reinstala', () => {
+test('o assistente reaberto é bloqueado em PNP INSTALADA sem abrir diálogo de instalação', () => {
   const copy = preparedCopy();
   copy.install();
   const insertions = copy.state.insertions;
-  assert.equal(copy.start().status, 'opened');
-  assert.equal(copy.evaluate('obterContextoAssistenteInstalacaoPnp().installed'), true);
-  assert.equal(copy.install().status, 'already_installed');
+  assert.equal(copy.start().status, 'blocked');
+  assert.equal(copy.state.dialogs.length, 0);
+  assert.match(copy.state.alerts.at(-1)[1], /nova cópia da planilha instaladora original/);
+  assert.throws(() => copy.install(), /instalação vigente/);
   assert.equal(copy.state.insertions, insertions);
 });
 
-test('instalação concluída com a apresentação antiga recebe a nova apresentação sem recriar dados', () => {
+test('instalação anterior sem propriedade persistente também fica bloqueada, com a aba renomeada', () => {
   const copy = preparedCopy();
   copy.install();
-  copy.spreadsheet.getSheetByName('PNP INSTALADA').setName('INSTALADORA');
-  copy.state.sheets.forEach(sheet => sheet.showSheet());
   const record = copy.record();
+  copy.spreadsheet.getSheetByName('PNP INSTALADA').setName('INSTALADORA');
+  copy.state.scriptProperties.clear();
+  copy.spreadsheet.getSheetByName('INSTALADORA').setName('Apresentação antiga');
   const insertions = copy.state.insertions;
-  assert.equal(copy.install().status, 'already_installed');
+  const before = snapshotWorkbook(copy);
+  assert.throws(() => copy.install(), /instalação vigente/);
+  assert.equal(copy.prepare().status, 'blocked');
+  assert.equal(copy.start().status, 'blocked');
   assert.equal(copy.state.insertions, insertions);
-  assert.deepEqual(copy.record(), record);
-  assert.ok(copy.spreadsheet.getSheetByName('PNP INSTALADA'));
-  assert.equal(copy.state.sheets.filter(sheet => !sheet.isSheetHidden()).length, 1);
+  assert.equal(snapshotWorkbook(copy), before);
+  assert.equal(JSON.parse(copy.spreadsheet.getSheetByName('Apresentação antiga').getRange('A40').getValue())
+    .installation.status, record.installation.status);
 });
 
 test('conflito com uma aba PNP INSTALADA existente bloqueia a instalação sem substituir dados', () => {
@@ -271,4 +285,72 @@ test('conflito com uma aba PNP INSTALADA existente bloqueia a instalação sem s
   assert.throws(() => copy.install(), /conflito de nomes/);
   assert.equal(existing.getRange('A1').getValue(), 'Dados do usuário');
   assert.equal(copy.spreadsheet.getSheetByName('USUARIOS'), null);
+});
+
+test('preparar instalador em instalação vigente bloqueia antes de pedir confirmação ou apagar abas', () => {
+  const copy = preparedCopy();
+  copy.install();
+  const before = snapshotWorkbook(copy);
+  const deleted = copy.state.deleted.length;
+  const lockAttempts = copy.state.lockAttempts;
+  assert.equal(copy.prepare().status, 'blocked');
+  assert.match(copy.state.alerts.at(-1)[1], /nova cópia da planilha instaladora original/);
+  assert.equal(copy.state.alerts.at(-1)[2], 'OK');
+  assert.equal(copy.state.deleted.length, deleted);
+  assert.equal(copy.state.lockAttempts, lockAttempts);
+  assert.equal(snapshotWorkbook(copy), before);
+});
+
+for (const entry of ['instalarVersao10', 'instalarVersao1005', 'instalarVersao1006',
+  'instalarVersao1007', 'instalarVersao1008', 'instalarVersao1009', 'criarEstruturasVersao10_']) {
+  test('instalação vigente também bloqueia a chamada direta: ' + entry, () => {
+    const copy = preparedCopy();
+    copy.install();
+    const before = snapshotWorkbook(copy);
+    assert.throws(() => copy.evaluate(entry + '()'), /instalação vigente/);
+    assert.equal(snapshotWorkbook(copy), before);
+  });
+}
+
+test('registro persistente impede preparar e instalar mesmo após apagar a apresentação', () => {
+  const copy = preparedCopy();
+  copy.install();
+  assert.equal(copy.state.scriptProperties.get('PNP_INSTALACAO_VIGENTE_copia-id'), 'installed');
+  copy.spreadsheet.getSheetByName('USUARIOS').showSheet();
+  copy.spreadsheet.deleteSheet(copy.spreadsheet.getSheetByName('PNP INSTALADA'));
+  const before = snapshotWorkbook(copy);
+  assert.equal(copy.prepare().status, 'blocked');
+  assert.equal(copy.start().status, 'blocked');
+  assert.throws(() => copy.install(), /instalação vigente/);
+  assert.equal(snapshotWorkbook(copy), before);
+});
+
+test('propriedades copiadas não bloqueiam uma nova cópia legítima do modelo', () => {
+  const model = simulate({scriptProperties: [['PNP_INSTALACAO_VIGENTE_outra-planilha', 'installed']]});
+  model.prepare();
+  const copy = model.copy('nova-copia');
+  assert.equal(copy.install().status, 'installed');
+  assert.equal(copy.state.scriptProperties.get('PNP_INSTALACAO_VIGENTE_nova-copia'), 'installed');
+  assert.equal(model.record().installation, null);
+});
+
+test('preparação revalida a instalação depois de obter a confirmação e o bloqueio', () => {
+  const app = simulate({onAlert(state) {
+    state.scriptProperties.set('PNP_INSTALACAO_VIGENTE_modelo-id', 'installed');
+  }});
+  const before = snapshotWorkbook(app);
+  assert.throws(() => app.prepare(), /instalação vigente/);
+  assert.equal(app.state.insertions, 0);
+  assert.equal(app.state.deleted.length, 0);
+  assert.equal(app.state.releases, 1);
+  assert.equal(snapshotWorkbook(app), before);
+});
+
+test('falha ao registrar a conclusão mantém a tentativa recuperável', () => {
+  const copy = preparedCopy({failInstalledPropertyWrites: 1});
+  assert.throws(() => copy.install(), /Falha simulada ao registrar instalação vigente/);
+  assert.equal(copy.record().installation.status, 'failed');
+  assert.equal(copy.state.scriptProperties.has('PNP_INSTALACAO_VIGENTE_copia-id'), false);
+  assert.equal(copy.install().status, 'installed');
+  assert.equal(copy.evaluate('AccessControlService.readUsers().length'), 1);
 });

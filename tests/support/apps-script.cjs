@@ -14,7 +14,9 @@ function simulate(options = {}) {
     email: options.email || 'antoniobarros@iftm.edu.br',
     failUserWrites: options.failUserWrites || 0,
     failInstalledViewWrites: options.failInstalledViewWrites || 0,
-    failHides: options.failHides || 0
+    failHides: options.failHides || 0,
+    failInstalledPropertyWrites: options.failInstalledPropertyWrites || 0,
+    scriptProperties: new Map(options.scriptProperties || [])
   };
 
   function parseRange(args) {
@@ -178,6 +180,7 @@ function simulate(options = {}) {
     },
     alert(...args) {
       state.alerts.push(args);
+      if (options.onAlert) options.onAlert(state, spreadsheet);
       if (options.changeSheetsInDialog) createSheet('Adicionada durante a confirmação');
       return options.answer || 'YES';
     },
@@ -208,7 +211,22 @@ function simulate(options = {}) {
     },
     Session: { getActiveUser() { return { getEmail() { return state.email; } }; } },
     Utilities: { getUuid() { return 'uuid-' + nextId++; } },
-    PropertiesService: { getUserProperties() { return { getProperty() { return null; } }; } },
+    PropertiesService: {
+      getUserProperties() { return { getProperty() { return null; } }; },
+      getScriptProperties() {
+        return {
+          getProperty(key) { return state.scriptProperties.get(key) ?? null; },
+          setProperty(key, value) {
+            if (state.failInstalledPropertyWrites > 0) {
+              state.failInstalledPropertyWrites--;
+              throw new Error('Falha simulada ao registrar instalação vigente.');
+            }
+            state.scriptProperties.set(key, value);
+            return this;
+          }
+        };
+      }
+    },
     Logger: { log() {} }
   });
   for (const name of fs.readdirSync(root).filter(name => name.endsWith('.js')).sort()) {
